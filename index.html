@@ -1,0 +1,1229 @@
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nimrod PT - Practice Management & Billing Dashboard</title>
+    <!-- Tailwind CSS for modern layout & styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for clean iconography -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Vue 3 JS Framework -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbars for clean dashboard look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        [v-cloak] {
+            display: none;
+        }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.85; transform: scale(0.98); }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 3s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased h-screen overflow-hidden">
+
+    <div id="app" class="flex h-screen w-screen overflow-hidden" v-cloak>
+
+        <!-- Notification Toast System -->
+        <div class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+            <transition-group name="toast">
+                <div v-for="toast in toasts" :key="toast.id" 
+                     :class="toast.type === 'success' ? 'bg-emerald-600' : (toast.type === 'error' ? 'bg-rose-600' : 'bg-amber-600')" 
+                     class="text-white px-5 py-4 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-0 opacity-100 pointer-events-auto max-w-md">
+                    <i :class="toast.type === 'success' ? 'fa-solid fa-circle-check' : (toast.type === 'error' ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-bell')"></i>
+                    <div class="flex-1">
+                        <p class="text-xs opacity-80 uppercase tracking-wider font-extrabold" v-if="toast.title">{{ toast.title }}</p>
+                        <p class="text-sm font-semibold">{{ toast.message }}</p>
+                    </div>
+                    <button @click="dismissToast(toast.id)" class="ml-auto text-white/80 hover:text-white">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </transition-group>
+        </div>
+
+        <!-- ================== MODAL: STK PUSH INTERACTIVE GATEWAY ================== -->
+        <div v-if="openStkModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden transform transition-all">
+                
+                <!-- Header (M-Pesa Brand Colored) -->
+                <div class="bg-gradient-to-r from-emerald-600 to-green-500 p-6 text-white relative">
+                    <button @click="closeStkPush" class="absolute top-4 right-4 text-white/80 hover:text-white bg-slate-950/20 w-8 h-8 rounded-full flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-md">
+                            <i class="fa-solid fa-mobile-screen text-2xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] bg-emerald-700/50 px-2.5 py-0.5 rounded-full font-extrabold uppercase tracking-widest text-emerald-100">STK Push Controller</span>
+                            <h3 class="text-xl font-extrabold">Instant M-Pesa Checkout</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 space-y-6">
+                    <!-- Client Details Overview -->
+                    <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm">
+                        <div>
+                            <span class="text-xs text-slate-400 font-bold block">CLIENT NAME</span>
+                            <span class="font-bold text-slate-800">{{ activeStkClient.name }}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-slate-400 font-bold block">TILL NUMBER</span>
+                            <span class="font-extrabold text-emerald-600"><i class="fa-solid fa-store mr-1"></i>345973</span>
+                        </div>
+                        <div class="mt-2">
+                            <span class="text-xs text-slate-400 font-bold block">SESSION DESCRIPTION</span>
+                            <span class="font-semibold text-slate-600">{{ activeStkClient.therapy }}</span>
+                        </div>
+                        <div class="text-right mt-2">
+                            <span class="text-xs text-slate-400 font-bold block">BILL CHARGE</span>
+                            <span class="font-extrabold text-slate-900">KES {{ activeStkClient.amount?.toLocaleString() }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Number Format Input Area -->
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Recipient M-Pesa Number</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm bg-slate-100 px-2 py-1 rounded-md">254</span>
+                            <input v-model="stkInputNumber" type="text" maxlength="9" placeholder="7XXXXXXXX" class="w-full pl-16 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-bold text-slate-800 tracking-widest">
+                        </div>
+                        <p class="text-[10px] text-slate-400 font-semibold"><i class="fa-solid fa-circle-info mr-1"></i>Ensure the Safaricom line is currently active and screen-unlocked to instantly receive the PIN prompt.</p>
+                    </div>
+
+                    <!-- Payment Progression Status Bar (Interactive Sandbox) -->
+                    <div v-if="stkStep > 0" class="border border-slate-100 bg-slate-50/50 rounded-2xl p-5 space-y-4">
+                        <div class="flex items-center justify-between text-xs font-bold">
+                            <span class="text-slate-500 uppercase">Interactive Transaction Lifecycle</span>
+                            <span :class="stkStep === 3 ? 'text-emerald-600' : 'text-indigo-600'" class="animate-pulse">{{ stkProgressText }}</span>
+                        </div>
+                        
+                        <!-- Progress Stepper Track -->
+                        <div class="flex items-center justify-between relative">
+                            <div class="absolute left-4 right-4 top-1/2 h-1 bg-slate-200 -translate-y-1/2 -z-10"></div>
+                            <div class="absolute left-4 top-1/2 h-1 bg-emerald-500 -translate-y-1/2 -z-10 transition-all duration-500" :style="{ width: (stkStep - 1) * 50 + '%' }"></div>
+                            
+                            <!-- Step 1 -->
+                            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300" 
+                                 :class="stkStep >= 1 ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-200 text-slate-500'">
+                                <i class="fa-solid fa-network-wired" v-if="stkStep === 1 && isPushingStk"></i>
+                                <span v-else>1</span>
+                            </div>
+                            <!-- Step 2 -->
+                            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300" 
+                                 :class="stkStep >= 2 ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-200 text-slate-500'">
+                                <i class="fa-solid fa-mobile-button animate-bounce" v-if="stkStep === 2"></i>
+                                <span v-else>2</span>
+                            </div>
+                            <!-- Step 3 -->
+                            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300" 
+                                 :class="stkStep >= 3 ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-200 text-slate-500'">
+                                <i class="fa-solid fa-check" v-if="stkStep === 3"></i>
+                                <span v-else>3</span>
+                            </div>
+                        </div>
+
+                        <!-- Mini Step Detail Logs -->
+                        <div class="text-[11px] font-mono text-slate-500 space-y-1 bg-slate-950 text-emerald-400 p-3 rounded-xl max-h-24 overflow-y-auto">
+                            <p v-for="log in stkLogs" :key="log">>> {{ log }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Operations -->
+                <div class="bg-slate-50 p-6 flex items-center gap-3 border-t border-slate-100">
+                    <button @click="closeStkPush" class="flex-1 border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold text-xs py-3.5 rounded-xl transition">
+                        Cancel Action
+                    </button>
+                    <button @click="initiateStkProcess" :disabled="isPushingStk" class="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-xs py-3.5 rounded-xl transition shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-circle-notch fa-spin" v-if="isPushingStk"></i>
+                        <i class="fa-solid fa-paper-plane" v-else></i>
+                        {{ stkStep > 0 ? 'Retry Prompt' : 'Dispatch Push SMS' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================== MODAL: LOG NEW PRACTICE SESSION ================== -->
+        <div v-if="openNewClientModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden transform transition-all">
+                <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-800">Log New Therapy / Coaching Session</h3>
+                    <button @click="openNewClientModal = false" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-500">Client's Full Name</label>
+                            <input v-model="newClient.name" type="text" placeholder="e.g. Kelvin Kiptum" class="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-500">Phone (format: 2547...)</label>
+                            <input v-model="newClient.phone" type="text" placeholder="254712345678" class="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-500">Therapy/Service Type</label>
+                            <select v-model="newClient.therapy" class="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                                <option value="Physical Rehabilitation">Physical Rehabilitation</option>
+                                <option value="Orthopedic Therapy">Orthopedic Therapy</option>
+                                <option value="Sports Physiotherapy">Sports Physiotherapy</option>
+                                <option value="Posture Correction Coaching">Posture Correction Coaching</option>
+                                <option value="Post-Op Muscle Recovery">Post-Op Muscle Recovery</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-500">Fee Charged (KES)</label>
+                            <input v-model.number="newClient.amount" type="number" placeholder="5000" class="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-500">Assigned Therapist</label>
+                            <select v-model="newClient.therapist" class="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                                <option value="Dr. Nimrod Kiprotich">Dr. Nimrod Kiprotich</option>
+                                <option value="Coach Emily Chelimo">Coach Emily Chelimo</option>
+                                <option value="Dr. Mark Kamau">Dr. Mark Kamau</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-500">Initial Status</label>
+                            <select v-model="newClient.status" class="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                                <option value="Unpaid">Unpaid (Needs M-Pesa Push)</option>
+                                <option value="Paid">Paid</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2">
+                    <button @click="openNewClientModal = false" class="px-4 py-2 text-slate-600 font-bold text-xs hover:bg-slate-200 rounded-xl transition">
+                        Cancel
+                    </button>
+                    <button @click="saveNewSession" class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-md shadow-indigo-600/10">
+                        Log Session & Save
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================== MODAL: QUICK BACKEND CODE EXPORTER ================== -->
+        <div v-if="openCodeModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-slate-950 text-slate-100 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col h-[85vh]">
+                <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                            <i class="fa-solid fa-code"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold">Daraja API Integration Bridge</h3>
+                            <p class="text-xs text-slate-500">Copy this backend script to power your live STK phone triggers.</p>
+                        </div>
+                    </div>
+                    <button @click="openCodeModal = false" class="text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                <!-- Code Selection Tabs -->
+                <div class="flex border-b border-slate-800 bg-slate-900/50">
+                    <button @click="activeCodeLang = 'node'" :class="activeCodeLang === 'node' ? 'border-b-2 border-indigo-500 text-indigo-400 bg-slate-900/80' : 'text-slate-400 hover:text-slate-200'" class="px-6 py-3 text-xs font-bold tracking-wider uppercase transition">
+                        Node.js Express
+                    </button>
+                    <button @click="activeCodeLang = 'php'" :class="activeCodeLang === 'php' ? 'border-b-2 border-indigo-500 text-indigo-400 bg-slate-900/80' : 'text-slate-400 hover:text-slate-200'" class="px-6 py-3 text-xs font-bold tracking-wider uppercase transition">
+                        Vanilla PHP Script
+                    </button>
+                </div>
+                <!-- Snippet Container -->
+                <div class="flex-1 overflow-y-auto p-6 font-mono text-xs leading-relaxed bg-slate-950">
+                    <pre v-if="activeCodeLang === 'node'" class="text-indigo-300">
+// Install dependencies: npm install express axios dotenv
+const express = require('express');
+const axios = require('axios');
+const app = express();
+app.use(express.json());
+
+const TILL_NUMBER = "345973"; // Your Safaricom Till Number
+const CONSUMER_KEY = "YOUR_DARAJA_CONSUMER_KEY";
+const CONSUMER_SECRET = "YOUR_DARAJA_CONSUMER_SECRET";
+const PASSKEY = "YOUR_STK_PASSKEY";
+
+// Generate Timestamp (YYYYMMDDHHMMSS)
+const getTimestamp = () => {
+    const date = new Date();
+    return date.getFullYear() +
+        ('0' + (date.getMonth() + 1)).slice(-2) +
+        ('0' + date.getDate()).slice(-2) +
+        ('0' + date.getHours()).slice(-2) +
+        ('0' + date.getMinutes()).slice(-2) +
+        ('0' + date.getSeconds()).slice(-2);
+};
+
+// Route to Trigger the STK Push directly on client device
+app.post('/api/stkpush', async (req, res) => {
+    try {
+        const { phoneNumber, amount } = req.body; // e.g., 254712345678, 5000
+        
+        // 1. Get Access Token
+        const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString('base64');
+        const tokenResponse = await axios.get(
+            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
+            { headers: { Authorization: `Basic ${auth}` } }
+        );
+        const accessToken = tokenResponse.data.access_token;
+        
+        // 2. Build Request Parameters
+        const timestamp = getTimestamp();
+        // Password must be Base64 encoded: BusinessShortCode + Passkey + Timestamp
+        const password = Buffer.from(`${TILL_NUMBER}${PASSKEY}${timestamp}`).toString('base64');
+        
+        const stkPayload = {
+            "BusinessShortCode": TILL_NUMBER,
+            "Password": password,
+            "Timestamp": timestamp,
+            "TransactionType": "CustomerBuyGoodsOnline", // Buy Goods Online Till type
+            "Amount": amount,
+            "PartyA": phoneNumber, 
+            "PartyB": TILL_NUMBER, 
+            "PhoneNumber": phoneNumber,
+            "CallBackURL": "https://yourdomain.com/api/callback", // Webhook URL to receive confirmation
+            "AccountReference": "NimrodPTClinic",
+            "TransactionDesc": "Therapy Session Payment"
+        };
+        
+        // 3. Dispatch to Safaricom Endpoint
+        const response = await axios.post(
+            'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/query', // Replace with production URL in live environment
+            stkPayload,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        
+        res.status(200).json({ success: true, data: response.data });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.response?.data || error.message });
+    }
+});</pre>
+                    <pre v-if="activeCodeLang === 'php'" class="text-emerald-300">
+&lt;?php
+header("Content-Type: application/json");
+
+$tillNumber = "345973"; 
+$consumerKey = "YOUR_DARAJA_CONSUMER_KEY";
+$consumerSecret = "YOUR_DARAJA_CONSUMER_SECRET";
+$passkey = "YOUR_STK_PASSKEY";
+
+// Step 1: Generate access token
+$headers = ['Authorization: Basic ' . base64_encode($consumerKey . ':' . $consumerSecret)];
+$curl = curl_init('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials');
+curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+$response = json_decode(curl_exec($curl));
+curl_close($curl);
+
+$accessToken = $response->access_token;
+
+// Step 2: Define parameters
+$timestamp = date('YmdHis');
+$password = base64_encode($tillNumber . $passkey . $timestamp);
+
+$requestData = json_decode(file_get_contents('php://input'), true);
+$phoneNumber = $requestData['phoneNumber']; 
+$amount = $requestData['amount']; 
+
+$curl_post_data = [
+    'BusinessShortCode' => $tillNumber,
+    'Password' => $password,
+    'Timestamp' => $timestamp,
+    'TransactionType' => 'CustomerBuyGoodsOnline',
+    'Amount' => $amount,
+    'PartyA' => $phoneNumber,
+    'PartyB' => $tillNumber,
+    'PhoneNumber' => $phoneNumber,
+    'CallBackURL' => 'https://yourdomain.com/api/callback',
+    'AccountReference' => 'NimrodPTClinic',
+    'TransactionDesc' => 'Therapy Session Payment'
+];
+
+$data_string = json_encode($curl_post_data);
+
+// Step 3: Call M-Pesa STK Push Endpoint
+$curl = curl_init('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/query');
+curl_setopt($curl, CURLOPT_HTTPHEADER, [
+    'Content-Type: application/json',
+    'Authorization: Bearer ' . $accessToken
+]);
+curl_setopt($curl, CURLOPT_POST, true);
+curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
+curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+$stk_response = curl_exec($curl);
+curl_close($curl);
+
+echo $stk_response;
+?&gt;</pre>
+                </div>
+                <div class="bg-slate-900 p-4 border-t border-slate-800 flex justify-end gap-2 text-xs">
+                    <span class="text-slate-500 self-center mr-4">Use standard port forwarding (like Ngrok) to test locally!</span>
+                    <button @click="copyCodeSnippet" class="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-5 py-2.5 rounded-xl transition">
+                        Copy Integration Snippet
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================== SIDEBAR NAVIGATION ================== -->
+        <aside class="w-64 bg-slate-900 text-white flex flex-col justify-between flex-shrink-0 border-r border-slate-800 shadow-2xl z-40">
+            <div>
+                <!-- Brand & Logo -->
+                <div class="p-6 border-b border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+                            <i class="fa-solid fa-house-medical text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold tracking-tight text-white">NIMROD PT</h2>
+                            <span class="text-xs font-semibold text-emerald-400 tracking-wider uppercase">Clinic HQ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="p-4 space-y-1.5">
+                    <button @click="currentTab = 'dashboard'" :class="currentTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'" class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left transition duration-200 group">
+                        <i class="fa-solid fa-chart-line text-lg group-hover:scale-110 transition-transform"></i>
+                        <span class="font-medium text-sm">Overview Dashboard</span>
+                    </button>
+
+                    <button @click="currentTab = 'clients'" :class="currentTab === 'clients' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'" class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left transition duration-200 group">
+                        <i class="fa-solid fa-file-invoice-dollar text-lg group-hover:scale-110 transition-transform"></i>
+                        <span class="font-medium text-sm">Billing & Clients</span>
+                    </button>
+
+                    <button @click="currentTab = 'mpesa'" :class="currentTab === 'mpesa' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'" class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left transition duration-200 group">
+                        <i class="fa-solid fa-receipt text-lg group-hover:scale-110 transition-transform text-emerald-400"></i>
+                        <span class="font-medium text-sm">M-Pesa Ledger</span>
+                    </button>
+
+                    <button @click="currentTab = 'team'" :class="currentTab === 'team' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'" class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left transition duration-200 group">
+                        <i class="fa-solid fa-user-doctor text-lg group-hover:scale-110 transition-transform"></i>
+                        <span class="font-medium text-sm">Team Members</span>
+                    </button>
+
+                    <button @click="currentTab = 'reminders'" :class="currentTab === 'reminders' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'" class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-left transition duration-200 group">
+                        <i class="fa-solid fa-paper-plane text-lg group-hover:scale-110 transition-transform"></i>
+                        <span class="font-medium text-sm">Reminders Desk</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Profile Info & Integration Button -->
+            <div class="p-4 border-t border-slate-800 bg-slate-950/40 space-y-4">
+                <button @click="openCodeModal = true" class="w-full bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-700/60 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-code text-indigo-400"></i> Get Daraja Code
+                </button>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400 shadow-inner">
+                        NK
+                    </div>
+                    <div class="overflow-hidden">
+                        <p class="text-sm font-bold text-slate-200 truncate">Nimrod Kiprotich</p>
+                        <p class="text-xs text-slate-500 truncate font-semibold">Lead Administrator</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ================== CONTENT AREA ================== -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header bar -->
+            <header class="bg-white border-b border-slate-100 px-8 py-4 flex items-center justify-between flex-shrink-0 shadow-sm">
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800">
+                        <span v-if="currentTab === 'dashboard'">Practice Operations Control</span>
+                        <span v-else-if="currentTab === 'clients'">Client Sessions & Financial Ledgers</span>
+                        <span v-else-if="currentTab === 'mpesa'">M-Pesa Transaction Ledger & Auto-Parser</span>
+                        <span v-else-if="currentTab === 'team'">Therapist & Coach Directory</span>
+                        <span v-else-if="currentTab === 'reminders'">Custom Reminders Workflow</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 font-medium">Keep track of your physical therapy practice in real time.</p>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <button @click="openNewClientModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition duration-150 shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20">
+                        <i class="fa-solid fa-plus text-xs"></i> Log New Session
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Inner Content Wrapper -->
+            <div class="flex-1 overflow-y-auto p-8 bg-slate-50">
+
+                <!-- ================== TAB: DASHBOARD ================== -->
+                <div v-if="currentTab === 'dashboard'" class="space-y-8 animate-fade-in">
+                    <!-- Stat Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <!-- Collected Revenue -->
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition duration-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Collected Revenue</span>
+                                <span class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-circle-check text-lg"></i></span>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-extrabold text-slate-900">KES {{ totalRevenue.toLocaleString() }}</h3>
+                                <p class="text-xs text-slate-500 mt-1 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-circle text-[8px] text-emerald-500"></i> From logged paid sessions
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Outstanding Revenue -->
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition duration-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Outstanding Debts</span>
+                                <span class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><i class="fa-solid fa-triangle-exclamation text-lg"></i></span>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-extrabold text-rose-600">KES {{ outstandingRevenue.toLocaleString() }}</h3>
+                                <p class="text-xs text-slate-500 mt-1 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-circle text-[8px] text-rose-500 animate-pulse"></i> Needs follow-up reminders
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Payment Efficiency -->
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition duration-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Collection Rate</span>
+                                <span class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="fa-solid fa-percentage text-lg"></i></span>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-extrabold text-slate-900">{{ collectionEfficiency }}%</h3>
+                                <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                                    <div class="bg-indigo-600 h-full transition-all duration-500" :style="{ width: collectionEfficiency + '%' }"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active Clients -->
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition duration-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Sessions</span>
+                                <span class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center"><i class="fa-solid fa-users text-lg"></i></span>
+                            </div>
+                            <div class="mt-4">
+                                <h3 class="text-2xl font-extrabold text-slate-900">{{ clients.length }}</h3>
+                                <p class="text-xs text-slate-500 mt-1 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-circle text-[8px] text-sky-500"></i> Total clinic records logged
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Reminders Queue -->
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                                    Immediate Payment Reminders Queue
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">These clients have finished sessions but have not cleared payments yet. Click "M-Pesa Push" to prompt them instantly.</p>
+                            </div>
+                            <span class="bg-rose-50 text-rose-700 text-xs font-bold px-3 py-1.5 rounded-xl border border-rose-100">
+                                {{ unpaidClients.length }} Pending Invoices
+                            </span>
+                        </div>
+
+                        <div v-if="unpaidClients.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div v-for="client in unpaidClients" :key="client.id" class="p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50 flex flex-col justify-between h-48 shadow-sm hover:shadow-md">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-extrabold text-slate-950 text-base flex items-center gap-2">
+                                            {{ client.name }}
+                                            <span class="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full">{{ client.therapy }}</span>
+                                        </p>
+                                        <p class="text-xs text-slate-400 mt-1 font-medium"><i class="fa-regular fa-calendar-check mr-1"></i> Session: {{ formatDate(client.date) }}</p>
+                                    </div>
+                                    <span class="text-lg font-extrabold text-rose-600 font-mono">KES {{ client.amount.toLocaleString() }}</span>
+                                </div>
+
+                                <div class="flex items-center gap-2 border-t border-slate-200/60 pt-4 mt-auto">
+                                    <button @click="launchStkPush(client)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10">
+                                        <i class="fa-solid fa-mobile-screen-button"></i> M-Pesa STK Push
+                                    </button>
+                                    <button @click="dispatchWhatsAppAlert(client)" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-green-600/10">
+                                        <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp Alert
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empty state visual -->
+                        <div v-else class="py-12 flex flex-col items-center justify-center text-center">
+                            <div class="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center text-2xl mb-4">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                            <h4 class="text-base font-bold text-slate-800">You are fully squared up!</h4>
+                            <p class="text-xs text-slate-500 mt-1 max-w-sm">Fantastic work Nimrod! All physical therapy records currently logged have cleared their balances.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================== TAB: CLIENTS & BILLING ================== -->
+                <div v-if="currentTab === 'clients'" class="space-y-6 animate-fade-in">
+                    <!-- Filter and Search Header Control -->
+                    <div class="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                        <!-- Filters -->
+                        <div class="flex items-center gap-2 w-full md:w-auto">
+                            <button @click="statusFilter = 'all'" :class="statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'" class="px-4 py-2 rounded-xl text-xs font-bold transition">
+                                All Sessions ({{ clients.length }})
+                            </button>
+                            <button @click="statusFilter = 'Paid'" :class="statusFilter === 'Paid' ? 'bg-emerald-600 text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'" class="px-4 py-2 rounded-xl text-xs font-bold transition">
+                                Paid ({{ clients.filter(c => c.status === 'Paid').length }})
+                            </button>
+                            <button @click="statusFilter = 'Unpaid'" :class="statusFilter === 'Unpaid' ? 'bg-rose-600 text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'" class="px-4 py-2 rounded-xl text-xs font-bold transition">
+                                Unpaid ({{ clients.filter(c => c.status === 'Unpaid').length }})
+                            </button>
+                        </div>
+
+                        <!-- Search Bar -->
+                        <div class="relative w-full md:w-80">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input v-model="searchQuery" type="text" placeholder="Search by name, therapist or therapy..." class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        </div>
+                    </div>
+
+                    <!-- Main Records Table Grid -->
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                        <th class="p-4 pl-6">Client Info</th>
+                                        <th class="p-4">Session & Therapist</th>
+                                        <th class="p-4">Billing Date</th>
+                                        <th class="p-4">Fee Charged</th>
+                                        <th class="p-4">Payment Status</th>
+                                        <th class="p-4 pr-6 text-right">Instant Control Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-sm">
+                                    <tr v-for="client in filteredClients" :key="client.id" class="hover:bg-slate-50/50 transition duration-150">
+                                        <!-- Client Details -->
+                                        <td class="p-4 pl-6">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-xs">
+                                                    {{ getInitials(client.name) }}
+                                                </div>
+                                                <div>
+                                                    <p class="font-extrabold text-slate-900 leading-snug">{{ client.name }}</p>
+                                                    <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                                                        <span><i class="fa-solid fa-phone text-[10px] mr-1"></i>+{{ client.phone }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <!-- Session type / Therapist -->
+                                        <td class="p-4">
+                                            <p class="font-bold text-slate-800">{{ client.therapy }}</p>
+                                            <p class="text-xs text-slate-400 mt-0.5">Assigned: <span class="font-semibold text-indigo-500">{{ client.therapist || 'Not Assigned' }}</span></p>
+                                        </td>
+
+                                        <!-- Billing Date -->
+                                        <td class="p-4 text-slate-500 text-xs font-medium">
+                                            <i class="fa-regular fa-calendar mr-1"></i> {{ formatDate(client.date) }}
+                                        </td>
+
+                                        <!-- Cost / Amount -->
+                                        <td class="p-4 font-bold text-slate-900 text-sm">
+                                            KES {{ client.amount.toLocaleString() }}
+                                        </td>
+
+                                        <!-- Payment Status Badge -->
+                                        <td class="p-4">
+                                            <button @click="toggleStatus(client.id)" :class="client.status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse-slow'" class="px-3 py-1 rounded-full text-xs font-bold border transition duration-150 flex items-center gap-1.5 cursor-pointer hover:scale-105">
+                                                <span :class="client.status === 'Paid' ? 'bg-emerald-500' : 'bg-rose-500'" class="w-1.5 h-1.5 rounded-full inline-block"></span>
+                                                {{ client.status }}
+                                            </button>
+                                        </td>
+
+                                        <!-- Actions -->
+                                        <td class="p-4 pr-6">
+                                            <div class="flex items-center justify-end gap-2">
+                                                <button v-if="client.status === 'Unpaid'" @click="launchStkPush(client)" class="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition" title="M-Pesa STK Push">
+                                                    <i class="fa-solid fa-mobile-screen-button"></i>
+                                                </button>
+                                                <button v-if="client.status === 'Unpaid'" @click="dispatchWhatsAppAlert(client)" class="p-2 bg-green-50 text-green-600 hover:bg-green-600 hover:text-white rounded-lg transition" title="Send WhatsApp">
+                                                    <i class="fa-brands fa-whatsapp text-base"></i>
+                                                </button>
+                                                <button @click="deleteClientSession(client.id)" class="p-2 bg-slate-50 hover:bg-rose-100 text-rose-600 rounded-lg transition" title="Delete Record">
+                                                    <i class="fa-regular fa-trash-can text-base"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr v-if="filteredClients.length === 0">
+                                        <td colspan="6" class="py-16 text-center text-slate-400 italic">
+                                            <i class="fa-solid fa-folder-open text-3xl text-slate-200 mb-2 block"></i>
+                                            No sessions match your filter criteria or search.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================== TAB: MPESA LEDGER & AUTO PARSER ================== -->
+                <div v-if="currentTab === 'mpesa'" class="space-y-6 animate-fade-in">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- SMS Parser Input -->
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-lg shadow-md shadow-emerald-500/10">
+                                    <i class="fa-solid fa-clipboard-check"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-extrabold text-slate-900">M-Pesa SMS Reader</h3>
+                                    <p class="text-xs text-slate-500">Auto-match payments paste-box.</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3">
+                                <textarea v-model="rawSmsInput" rows="6" placeholder="Example: KQA31B2C3D Confirmed. KES 5,000.00 received from ELIUD KIPCHOGE 254712345678 on 6/7/26..." class="w-full border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-mono text-slate-700"></textarea>
+                                
+                                <div class="flex gap-2 justify-end">
+                                    <button @click="loadSampleSms" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition">
+                                        Load Sample SMS
+                                    </button>
+                                    <button @click="parseAndSaveMpesaSms" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-md">
+                                        Verify & Auto-Match
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Autonomous M-Pesa Accounting Guide -->
+                        <div class="bg-gradient-to-br from-emerald-900 to-slate-950 text-white p-6 rounded-2xl relative shadow-xl overflow-hidden flex flex-col justify-between lg:col-span-2">
+                            <div class="absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                            
+                            <div>
+                                <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+                                    Autonomous M-Pesa Accounting
+                                </h4>
+                                <h3 class="text-base font-bold mb-2">How to collect and reconcile payments:</h3>
+                                <ul class="space-y-2.5 text-xs text-slate-300 leading-relaxed font-medium">
+                                    <li class="flex items-start gap-2">
+                                        <i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i>
+                                        <span><strong>Trigger an STK Push</strong>: Prompts your client on their screen instantly. They input their standard, secure Safaricom PIN to complete the transfer.</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i>
+                                        <span><strong>Receive SMS Statement</strong>: Once paid, paste the incoming transaction message into the reader box on the left.</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i>
+                                        <span><strong>Auto-Match & Log</strong>: The parser registers the unique transaction ID, links it instantly to matching clients, and clears their balance automatically.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-emerald-800 flex justify-between items-center">
+                                <span class="text-xs text-slate-300 font-bold">Your Paybill/Till No: <strong class="text-emerald-300">345973</strong></span>
+                                <button @click="openCodeModal = true" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition">
+                                    Show API Code
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- M-Pesa Ledger Table -->
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                        <h3 class="text-sm font-bold text-slate-800 mb-4">Reconciled M-Pesa Transaction History</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                        <th class="p-4">Transaction Code</th>
+                                        <th class="p-4">Sender Info</th>
+                                        <th class="p-4">Phone Number</th>
+                                        <th class="p-4">Amount Reconciled</th>
+                                        <th class="p-4">Timestamp</th>
+                                        <th class="p-4">Match Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-sm">
+                                    <tr v-for="tx in mpesaTransactions" :key="tx.code">
+                                        <td class="p-4 font-mono font-bold text-emerald-600">{{ tx.code }}</td>
+                                        <td class="p-4 font-bold">{{ tx.sender }}</td>
+                                        <td class="p-4 font-mono text-xs text-slate-600">+{{ tx.phone }}</td>
+                                        <td class="p-4 font-extrabold text-slate-950">KES {{ tx.amount.toLocaleString() }}</td>
+                                        <td class="p-4 text-xs text-slate-400">{{ tx.date }}</td>
+                                        <td class="p-4">
+                                            <span class="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-100 flex items-center gap-1 w-max">
+                                                <i class="fa-solid fa-link"></i> Auto-Matched
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="mpesaTransactions.length === 0">
+                                        <td colspan="6" class="py-12 text-center text-slate-400 italic text-xs">
+                                            No transaction history recorded yet. Use the parser to verify incoming records!
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================== TAB: TEAM MEMBERS ================== -->
+                <div v-if="currentTab === 'team'" class="space-y-6 animate-fade-in">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div v-for="member in team" :key="member.id" class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                            <div class="w-20 h-20 rounded-full bg-indigo-50 border-2 border-indigo-100 flex items-center justify-center text-indigo-600 text-2xl font-black mb-4">
+                                {{ getInitials(member.name) }}
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900">{{ member.name }}</h3>
+                            <p class="text-xs text-indigo-600 font-semibold mb-2">{{ member.role }}</p>
+                            <span class="bg-slate-50 border border-slate-100 text-[11px] text-slate-500 px-3 py-1 rounded-full font-bold">
+                                {{ member.assignedSessions }} Managed Sessions
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================== TAB: REMINDERS DESK ================== -->
+                <div v-if="currentTab === 'reminders'" class="space-y-6 animate-fade-in">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-500/10">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-extrabold text-slate-900">Custom Payment Reminders Desk</h3>
+                                <p class="text-xs text-slate-500">Dispatch alerts via communication channels to clients with outstanding balances.</p>
+                            </div>
+                        </div>
+
+                        <!-- List of unpaid clients for reminder generation -->
+                        <div class="space-y-4">
+                            <div v-for="client in unpaidClients" :key="client.id" class="p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                <div>
+                                    <h4 class="font-bold text-slate-900">{{ client.name }}</h4>
+                                    <p class="text-xs text-slate-500">Due Balance: <strong class="text-rose-600">KES {{ client.amount.toLocaleString() }}</strong> | Mobile: +{{ client.phone }}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button @click="dispatchWhatsAppAlert(client)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                                        <i class="fa-brands fa-whatsapp text-sm"></i> Send WhatsApp Notice
+                                    </button>
+                                    <button @click="dispatchSMSAlert(client)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                                        <i class="fa-solid fa-message text-sm"></i> Send Local SMS Alert
+                                    </button>
+                                </div>
+                            </div>
+                            <div v-if="unpaidClients.length === 0" class="text-center py-12 text-slate-400 italic text-xs">
+                                All clients are paid up! No payment reminders need dispatching.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Vue App Controller Logic -->
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                // Navigation State
+                const currentTab = ref('dashboard');
+                const searchQuery = ref('');
+                const statusFilter = ref('all');
+
+                // Practice State / Client Data Model
+                const clients = ref([
+                    { id: 1, name: 'Eliud Kipchoge', phone: '254712345678', therapy: 'Sports Physiotherapy', date: '2026-07-06', amount: 5000, status: 'Unpaid', therapist: 'Dr. Nimrod Kiprotich' },
+                    { id: 2, name: 'Faith Kipyegon', phone: '254711223344', therapy: 'Orthopedic Therapy', date: '2026-07-05', amount: 4500, status: 'Paid', therapist: 'Coach Emily Chelimo' },
+                    { id: 3, name: 'Mary Moraa', phone: '254755667788', therapy: 'Physical Rehabilitation', date: '2026-07-03', amount: 6000, status: 'Unpaid', therapist: 'Dr. Nimrod Kiprotich' },
+                    { id: 4, name: 'Ferdinand Omanyala', phone: '254799001122', therapy: 'Post-Op Muscle Recovery', date: '2026-07-01', amount: 7500, status: 'Paid', therapist: 'Dr. Mark Kamau' },
+                    { id: 5, name: 'Amos Kipruto', phone: '254733445566', therapy: 'Posture Correction Coaching', date: '2026-06-29', amount: 4000, status: 'Unpaid', therapist: 'Coach Emily Chelimo' }
+                ]);
+
+                // Team Records
+                const team = ref([
+                    { id: 1, name: 'Dr. Nimrod Kiprotich', role: 'Lead PT Administrator', assignedSessions: 3 },
+                    { id: 2, name: 'Coach Emily Chelimo', role: 'Sports Performance Specialist', assignedSessions: 2 },
+                    { id: 3, name: 'Dr. Mark Kamau', role: 'Clinical Osteopath Specialist', assignedSessions: 1 }
+                ]);
+
+                // M-Pesa Reconciled History
+                const mpesaTransactions = ref([
+                    { code: 'RFH82M1K4B', sender: 'Ferdinand Omanyala', phone: '254799001122', amount: 7500, date: '2026-07-01 14:15 PM' },
+                    { code: 'RFD31S9L3A', sender: 'Faith Kipyegon', phone: '254711223344', amount: 4500, date: '2026-07-05 10:30 AM' }
+                ]);
+
+                // Toast Notification State
+                const toasts = ref([]);
+                const triggerNotification = (title, message, type = 'success') => {
+                    const id = Date.now();
+                    toasts.value.push({ id, title, message, type });
+                    setTimeout(() => {
+                        dismissToast(id);
+                    }, 5000);
+                };
+                const dismissToast = (id) => {
+                    toasts.value = toasts.value.filter(t => t.id !== id);
+                };
+
+                // STK Push Sandbox Flow State
+                const openStkModal = ref(false);
+                const activeStkClient = ref({});
+                const stkInputNumber = ref('');
+                const stkStep = ref(0);
+                const isPushingStk = ref(false);
+                const stkLogs = ref([]);
+                const stkProgressText = ref('');
+
+                // SMS Auto-Parser State
+                const rawSmsInput = ref('');
+
+                // Modal States
+                const openNewClientModal = ref(false);
+                const openCodeModal = ref(false);
+                const activeCodeLang = ref('node');
+
+                const newClient = ref({
+                    name: '',
+                    phone: '',
+                    therapy: 'Physical Rehabilitation',
+                    amount: '',
+                    therapist: 'Dr. Nimrod Kiprotich',
+                    status: 'Unpaid'
+                });
+
+                // Financial Computations
+                const totalRevenue = computed(() => {
+                    return clients.value
+                        .filter(c => c.status === 'Paid')
+                        .reduce((acc, curr) => acc + curr.amount, 0);
+                });
+
+                const outstandingRevenue = computed(() => {
+                    return clients.value
+                        .filter(c => c.status === 'Unpaid')
+                        .reduce((acc, curr) => acc + curr.amount, 0);
+                });
+
+                const collectionEfficiency = computed(() => {
+                    const total = totalRevenue.value + outstandingRevenue.value;
+                    if (total === 0) return 100;
+                    return Math.round((totalRevenue.value / total) * 100);
+                });
+
+                const unpaidClients = computed(() => {
+                    return clients.value.filter(c => c.status === 'Unpaid');
+                });
+
+                const filteredClients = computed(() => {
+                    return clients.value.filter(c => {
+                        const query = searchQuery.value.toLowerCase();
+                        const matchesSearch = c.name.toLowerCase().includes(query) || 
+                                              c.therapy.toLowerCase().includes(query) || 
+                                              c.therapist.toLowerCase().includes(query);
+                        
+                        if (statusFilter.value === 'all') return matchesSearch;
+                        return matchesSearch && c.status === statusFilter.value;
+                    });
+                });
+
+                // Helper formatting utils
+                const formatDate = (dateStr) => {
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                };
+
+                const getInitials = (name) => {
+                    if (!name) return 'PT';
+                    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                };
+
+                // M-Pesa STK Push Simulator Workflow
+                const launchStkPush = (client) => {
+                    activeStkClient.value = client;
+                    // Auto strip phone non-digits
+                    let phoneDigits = client.phone.replace(/\D/g, '');
+                    // Normalize standard Safaricom mobile length (e.g. 254712345678 or 0712345678)
+                    if (phoneDigits.startsWith('254')) {
+                        phoneDigits = phoneDigits.substring(3);
+                    } else if (phoneDigits.startsWith('0')) {
+                        phoneDigits = phoneDigits.substring(1);
+                    }
+                    stkInputNumber.value = phoneDigits;
+                    stkStep.value = 0;
+                    stkLogs.value = [];
+                    stkProgressText.value = 'Awaiting payment initiation';
+                    openStkModal.value = true;
+                };
+
+                const closeStkPush = () => {
+                    openStkModal.value = false;
+                    stkStep.value = 0;
+                    isPushingStk.value = false;
+                };
+
+                const initiateStkProcess = () => {
+                    if (stkInputNumber.value.length < 9) {
+                        triggerNotification('Invalid Phone', 'Please provide a valid 9-digit mobile number.', 'error');
+                        return;
+                    }
+                    
+                    isPushingStk.value = true;
+                    stkStep.value = 1;
+                    stkLogs.value = [];
+                    stkLogs.value.push("Generating OAuth access token from Safaricom API...");
+                    stkProgressText.value = "Authenticating client connection...";
+
+                    // Step 1: Simulated Access Token Retrieval
+                    setTimeout(() => {
+                        stkLogs.value.push("Authentication token successfully compiled.");
+                        stkLogs.value.push("Formatting STK payload for Till Number: 345973...");
+                        stkStep.value = 2;
+                        stkProgressText.value = "Pushing PIN Request screen to device...";
+                        stkLogs.value.push(`Initiating dispatch packet to phone +254${stkInputNumber.value}`);
+                        stkLogs.value.push("Waiting for user input on mobile...");
+
+                        // Step 2: Simulated User PIN Input Confirmation
+                        setTimeout(() => {
+                            stkStep.value = 3;
+                            isPushingStk.value = false;
+                            stkProgressText.value = "Payment cleared successfully!";
+                            stkLogs.value.push("Webhook callback status returned [ResultCode: 0]");
+                            stkLogs.value.push(`KES ${activeStkClient.value.amount} credited to Till 345973.`);
+                            
+                            // Reconcile client status
+                            const target = clients.value.find(c => c.id === activeStkClient.value.id);
+                            if (target) {
+                                target.status = 'Paid';
+                            }
+
+                            // Inject transaction into history logs
+                            const randomTxCode = "K" + Math.random().toString(36).substr(2, 9).toUpperCase();
+                            mpesaTransactions.value.unshift({
+                                code: randomTxCode,
+                                sender: activeStkClient.value.name,
+                                phone: `254${stkInputNumber.value}`,
+                                amount: activeStkClient.value.amount,
+                                date: new Date().toLocaleString()
+                            });
+
+                            triggerNotification('Transaction Verified!', `STK Push successfully confirmed. ${activeStkClient.value.name} is now reconciled!`, 'success');
+                            
+                            // Close modal after brief success window
+                            setTimeout(() => {
+                                closeStkPush();
+                            }, 1500);
+
+                        }, 3000);
+
+                    }, 1500);
+                };
+
+                // SMS Auto Parser Reconcile System
+                const parseAndSaveMpesaSms = () => {
+                    if (!rawSmsInput.value.trim()) {
+                        triggerNotification('Empty SMS Content', 'Please paste a valid Safaricom transaction SMS receipt text.', 'error');
+                        return;
+                    }
+
+                    const smsText = rawSmsInput.value;
+                    
+                    // Regular Expression to match Safaricom Transaction Codes and data
+                    const codeRegex = /\b([A-Z0-9]{10})\b/;
+                    const amountRegex = /KES\s*([0-9,]+\.[0-9]{2})/;
+                    const phoneRegex = /(?:254|\b0)([71]\d{8})\b/;
+
+                    const codeMatch = smsText.match(codeRegex);
+                    const amountMatch = smsText.match(amountRegex);
+                    const phoneMatch = smsText.match(phoneRegex);
+
+                    if (!codeMatch) {
+                        triggerNotification('Parsing Failed', 'Could not locate a valid 10-character transaction ID inside the SMS text.', 'error');
+                        return;
+                    }
+
+                    const txCode = codeMatch[1];
+                    let extractedAmount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 0;
+                    
+                    let targetClient = null;
+
+                    // Match via Phone extraction
+                    if (phoneMatch) {
+                        let parsedPhone = phoneMatch[1];
+                        if (parsedPhone.startsWith('0')) parsedPhone = '254' + parsedPhone.substring(1);
+                        else if (!parsedPhone.startsWith('254')) parsedPhone = '254' + parsedPhone;
+                        
+                        targetClient = clients.value.find(c => c.phone === parsedPhone && c.status === 'Unpaid');
+                    }
+
+                    // Fallback to matching by matching payment amount if phone number doesn't match directly
+                    if (!targetClient && extractedAmount > 0) {
+                        targetClient = clients.value.find(c => c.amount === extractedAmount && c.status === 'Unpaid');
+                    }
+
+                    if (targetClient) {
+                        targetClient.status = 'Paid';
+                        mpesaTransactions.value.unshift({
+                            code: txCode,
+                            sender: targetClient.name,
+                            phone: targetClient.phone,
+                            amount: extractedAmount || targetClient.amount,
+                            date: new Date().toLocaleString()
+                        });
+                        triggerNotification('Auto-Matched Successful!', `Successfully processed transaction ${txCode}. ${targetClient.name} is now marked as Paid.`, 'success');
+                        rawSmsInput.value = '';
+                    } else {
+                        // Create non-matched standard ledger entry
+                        mpesaTransactions.value.unshift({
+                            code: txCode,
+                            sender: 'External Client Payment',
+                            phone: phoneMatch ? '254' + phoneMatch[1].replace(/^0/, '') : 'Unknown Sender',
+                            amount: extractedAmount || 1000,
+                            date: new Date().toLocaleString()
+                        });
+                        triggerNotification('Ledger Saved', `Recorded payment of KES ${extractedAmount || 1000} under Tx Code ${txCode}, but could not find a corresponding unpaid clinic patient.`, 'warning');
+                    }
+                };
+
+                const loadSampleSms = () => {
+                    rawSmsInput.value = `RKH83N3J1B Confirmed. KES 5,000.00 received from Eliud Kipchoge 254712345678 on 06/07/2026 at 6:40 PM. New M-PESA balance is KES 48,250.00. Thank you for using Safaricom.`;
+                };
+
+                // Add New Session
+                const saveNewSession = () => {
+                    if (!newClient.value.name || !newClient.value.phone || !newClient.value.amount) {
+                        triggerNotification('Missing Fields', 'Please fill out all required fields.', 'error');
+                        return;
+                    }
+
+                    // Normalize phone prefix
+                    let cleanPhone = newClient.value.phone.replace(/\D/g, '');
+                    if (cleanPhone.startsWith('0')) cleanPhone = '254' + cleanPhone.substring(1);
+                    else if (!cleanPhone.startsWith('254')) cleanPhone = '254' + cleanPhone;
+
+                    const newRecord = {
+                        id: Date.now(),
+                        name: newClient.value.name,
+                        phone: cleanPhone,
+                        therapy: newClient.value.therapy,
+                        date: new Date().toISOString().split('T')[0],
+                        amount: parseInt(newClient.value.amount),
+                        status: newClient.value.status,
+                        therapist: newClient.value.therapist
+                    };
+
+                    clients.value.unshift(newRecord);
+                    openNewClientModal.value = false;
+                    triggerNotification('Session Logged', `Successfully saved physical therapy record for ${newRecord.name}.`, 'success');
+
+                    // Reset Form State
+                    newClient.value = {
+                        name: '',
+                        phone: '',
+                        therapy: 'Physical Rehabilitation',
+                        amount: '',
+                        therapist: 'Dr. Nimrod Kiprotich',
+                        status: 'Unpaid'
+                    };
+                };
+
+                // Quick Controls
+                const toggleStatus = (id) => {
+                    const target = clients.value.find(c => c.id === id);
+                    if (target) {
+                        target.status = target.status === 'Paid' ? 'Unpaid' : 'Paid';
+                        triggerNotification('Status Updated', `${target.name} billing status set to ${target.status}.`);
+                    }
+                };
+
+                const deleteClientSession = (id) => {
+                    const target = clients.value.find(c => c.id === id);
+                    if (target) {
+                        clients.value = clients.value.filter(c => c.id !== id);
+                        triggerNotification('Session Deleted', `Removed session logs for ${target.name}.`, 'warning');
+                    }
+                };
+
+                // Communication Alerts Dispatches
+                const dispatchWhatsAppAlert = (client) => {
+                    const formattedMsg = encodeURIComponent(`Hi ${client.name}, this is Dr. Nimrod Kiprotich PT. Your invoice of KES ${client.amount.toLocaleString()} is currently outstanding. We have initiated an M-Pesa push directly to your phone. Please confirm the request with your M-Pesa PIN or pay via Buy Goods Till 345973. Thank you!`);
+                    const url = `https://wa.me/${client.phone}?text=${formattedMsg}`;
+                    window.open(url, '_blank');
+                    triggerNotification('WhatsApp Dispatched', `Redirecting to chat with ${client.name}...`, 'success');
+                };
+
+                const dispatchSMSAlert = (client) => {
+                    triggerNotification('SMS Delivered', `Payment instruction notice successfully queued to +${client.phone}.`, 'success');
+                };
+
+                const copyCodeSnippet = () => {
+                    // Quick fallback copy logic
+                    const codeBlock = document.querySelector('pre');
+                    const textRange = document.createRange();
+                    textRange.selectNode(codeBlock);
+                    window.getSelection().removeAllRanges();
+                    window.getSelection().addRange(textRange);
+                    try {
+                        document.execCommand('copy');
+                        triggerNotification('Copied to Clipboard!', 'Backend integration code successfully saved.', 'success');
+                    } catch (err) {
+                        triggerNotification('Copy Failed', 'Please manually select and copy.', 'error');
+                    }
+                    window.getSelection().removeAllRanges();
+                };
+
+                return {
+                    currentTab, searchQuery, statusFilter, clients, team, mpesaTransactions,
+                    toasts, dismissToast, triggerNotification,
+                    openStkModal, activeStkClient, stkInputNumber, stkStep, isPushingStk, stkLogs, stkProgressText,
+                    rawSmsInput, openNewClientModal, openCodeModal, activeCodeLang, newClient,
+                    totalRevenue, outstandingRevenue, collectionEfficiency, unpaidClients, filteredClients,
+                    formatDate, getInitials, launchStkPush, closeStkPush, initiateStkProcess,
+                    parseAndSaveMpesaSms, loadSampleSms, saveNewSession, toggleStatus, deleteClientSession,
+                    dispatchWhatsAppAlert, dispatchSMSAlert, copyCodeSnippet
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
