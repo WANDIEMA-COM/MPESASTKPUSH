@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -86,6 +86,16 @@
                 </div>
 
                 <div class="p-6 space-y-6">
+                    <!-- Connection Mode Banner -->
+                    <div class="flex items-center justify-between p-3 rounded-xl text-xs font-bold"
+                         :class="integrationMode === 'live' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-indigo-50 text-indigo-800 border border-indigo-200'">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full animate-ping" :class="integrationMode === 'live' ? 'bg-amber-500' : 'bg-indigo-500'"></span>
+                            <span>CURRENT MODE: {{ integrationMode === 'live' ? 'LIVE BACKEND CONNECTION' : 'SANDBOX SIMULATOR' }}</span>
+                        </div>
+                        <button @click="toggleIntegrationMode" class="underline hover:no-underline">Switch Mode</button>
+                    </div>
+
                     <!-- Client Details Overview -->
                     <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm">
                         <div>
@@ -116,10 +126,19 @@
                         <p class="text-[10px] text-slate-400 font-semibold"><i class="fa-solid fa-circle-info mr-1"></i>Ensure the Safaricom line is currently active and screen-unlocked to instantly receive the PIN prompt.</p>
                     </div>
 
+                    <!-- Live URL configuration (Only visible if Live mode active) -->
+                    <div v-if="integrationMode === 'live'" class="space-y-2 bg-slate-900 text-slate-200 p-4 rounded-2xl">
+                        <div class="flex items-center justify-between">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Local Backend URL</label>
+                            <span class="text-[9px] font-mono text-emerald-400">STK Route: /api/stkpush</span>
+                        </div>
+                        <input v-model="backendBaseUrl" type="text" placeholder="http://localhost:3000" class="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded-xl text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500">
+                    </div>
+
                     <!-- Payment Progression Status Bar (Interactive Sandbox) -->
                     <div v-if="stkStep > 0" class="border border-slate-100 bg-slate-50/50 rounded-2xl p-5 space-y-4">
                         <div class="flex items-center justify-between text-xs font-bold">
-                            <span class="text-slate-500 uppercase">Interactive Transaction Lifecycle</span>
+                            <span class="text-slate-500 uppercase">Transaction Lifecycle Logs</span>
                             <span :class="stkStep === 3 ? 'text-emerald-600' : 'text-indigo-600'" class="animate-pulse">{{ stkProgressText }}</span>
                         </div>
                         
@@ -149,7 +168,7 @@
                         </div>
 
                         <!-- Mini Step Detail Logs -->
-                        <div class="text-[11px] font-mono text-slate-500 space-y-1 bg-slate-950 text-emerald-400 p-3 rounded-xl max-h-24 overflow-y-auto">
+                        <div class="text-[11px] font-mono text-slate-500 space-y-1 bg-slate-950 text-emerald-400 p-3 rounded-xl max-h-32 overflow-y-auto">
                             <p v-for="log in stkLogs" :key="log">>> {{ log }}</p>
                         </div>
                     </div>
@@ -160,10 +179,10 @@
                     <button @click="closeStkPush" class="flex-1 border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold text-xs py-3.5 rounded-xl transition">
                         Cancel Action
                     </button>
-                    <button @click="initiateStkProcess" :disabled="isPushingStk" class="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-xs py-3.5 rounded-xl transition shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-2">
+                    <button @click="executeMpesaStkTrigger" :disabled="isPushingStk" class="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-xs py-3.5 rounded-xl transition shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-2">
                         <i class="fa-solid fa-circle-notch fa-spin" v-if="isPushingStk"></i>
                         <i class="fa-solid fa-paper-plane" v-else></i>
-                        {{ stkStep > 0 ? 'Retry Prompt' : 'Dispatch Push SMS' }}
+                        {{ integrationMode === 'live' ? 'Send Real STK Push' : 'Trigger Sandbox STK' }}
                     </button>
                 </div>
             </div>
@@ -263,10 +282,13 @@
                 <!-- Snippet Container -->
                 <div class="flex-1 overflow-y-auto p-6 font-mono text-xs leading-relaxed bg-slate-950">
                     <pre v-if="activeCodeLang === 'node'" class="text-indigo-300">
-// Install dependencies: npm install express axios dotenv
+// Install dependencies: npm install express axios dotenv cors
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 const app = express();
+
+app.use(cors()); // Enable CORS so your Vue dashboard can connect
 app.use(express.json());
 
 const TILL_NUMBER = "345973"; // Your Safaricom Till Number
@@ -328,9 +350,13 @@ app.post('/api/stkpush', async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, error: error.response?.data || error.message });
     }
-});</pre>
+});
+
+app.listen(3000, () => console.log('Safaricom API Bridge running on port 3000'));</pre>
                     <pre v-if="activeCodeLang === 'php'" class="text-emerald-300">
 &lt;?php
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
 
 $tillNumber = "345973"; 
@@ -475,6 +501,13 @@ echo $stk_response;
                 </div>
 
                 <div class="flex items-center gap-4">
+                    <!-- Live Connection Indicator -->
+                    <div class="flex items-center gap-2 bg-slate-100 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold">
+                        <span class="w-2.5 h-2.5 rounded-full"
+                              :class="integrationMode === 'live' ? 'bg-amber-500 animate-pulse' : 'bg-indigo-500'"></span>
+                        <span>Mode: {{ integrationMode === 'live' ? 'Live API Bridge' : 'Simulation Sandbox' }}</span>
+                        <button @click="toggleIntegrationMode" class="ml-2 text-indigo-600 hover:underline">Toggle</button>
+                    </div>
                     <button @click="openNewClientModal = true" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition duration-150 shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20">
                         <i class="fa-solid fa-plus text-xs"></i> Log New Session
                     </button>
@@ -871,6 +904,10 @@ echo $stk_response;
                 const searchQuery = ref('');
                 const statusFilter = ref('all');
 
+                // Real-time integration mode switcher
+                const integrationMode = ref('simulation'); // 'simulation' or 'live'
+                const backendBaseUrl = ref('http://localhost:3000');
+
                 // Practice State / Client Data Model
                 const clients = ref([
                     { id: 1, name: 'Eliud Kipchoge', phone: '254712345678', therapy: 'Sports Physiotherapy', date: '2026-07-06', amount: 5000, status: 'Unpaid', therapist: 'Dr. Nimrod Kiprotich' },
@@ -978,6 +1015,16 @@ echo $stk_response;
                     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
                 };
 
+                // Mode toggle
+                const toggleIntegrationMode = () => {
+                    integrationMode.value = integrationMode.value === 'live' ? 'simulation' : 'live';
+                    triggerNotification(
+                        'Mode Switched',
+                        `Now running in ${integrationMode.value === 'live' ? 'Live API Bridge' : 'Sandbox Simulator'} Mode.`,
+                        'warning'
+                    );
+                };
+
                 // M-Pesa STK Push Simulator Workflow
                 const launchStkPush = (client) => {
                     activeStkClient.value = client;
@@ -1002,6 +1049,79 @@ echo $stk_response;
                     isPushingStk.value = false;
                 };
 
+                // Execute Mpesa trigger routing depending on the configuration
+                const executeMpesaStkTrigger = () => {
+                    if (integrationMode.value === 'live') {
+                        triggerLiveStkPush();
+                    } else {
+                        initiateStkProcess();
+                    }
+                };
+
+                // Live API backend bridge dispatcher
+                const triggerLiveStkPush = async () => {
+                    if (stkInputNumber.value.length < 9) {
+                        triggerNotification('Invalid Phone', 'Please provide a valid 9-digit mobile number.', 'error');
+                        return;
+                    }
+
+                    isPushingStk.value = true;
+                    stkStep.value = 1;
+                    stkLogs.value = [];
+                    stkLogs.value.push(`Connecting to live bridge: ${backendBaseUrl.value}/api/stkpush...`);
+                    stkProgressText.value = "Contacting Local Server...";
+
+                    const payload = {
+                        phoneNumber: `254${stkInputNumber.value}`,
+                        amount: activeStkClient.value.amount
+                    };
+
+                    try {
+                        const response = await fetch(`${backendBaseUrl.value}/api/stkpush`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const resData = await response.json();
+
+                        stkStep.value = 2;
+                        stkLogs.value.push(`HTTP Response received [Status: ${response.status}]`);
+                        stkProgressText.value = "Parsing response package...";
+
+                        if (response.ok && resData.success) {
+                            stkStep.value = 3;
+                            stkLogs.value.push("Safaricom API successfully triggered!");
+                            stkLogs.value.push(`MerchantRequestID: ${resData.data.MerchantRequestID}`);
+                            stkLogs.value.push(`CheckoutRequestID: ${resData.data.CheckoutRequestID}`);
+                            stkLogs.value.push(`Response Description: ${resData.data.ResponseDescription}`);
+                            
+                            triggerNotification('STK Push Dispatched', 'Check your client\'s phone screen for the prompt!', 'success');
+                            
+                            // Let's set the status to paid on success
+                            const target = clients.value.find(c => c.id === activeStkClient.value.id);
+                            if (target) {
+                                target.status = 'Paid';
+                            }
+                        } else {
+                            stkStep.value = 0;
+                            stkLogs.value.push(`Error: ${JSON.stringify(resData.error || resData)}`);
+                            triggerNotification('API Error', 'The bridge returned a bad status code. View terminal logs.', 'error');
+                        }
+
+                    } catch (err) {
+                        stkStep.value = 0;
+                        stkLogs.value.push(`Network Connection Failed: ${err.message}`);
+                        stkLogs.value.push(`Ensure your Node/PHP server is running and CORS is enabled.`);
+                        triggerNotification('Bridge Offline', 'Could not connect to backend server bridge.', 'error');
+                    } finally {
+                        isPushingStk.value = false;
+                    }
+                };
+
+                // Simulation trigger routine
                 const initiateStkProcess = () => {
                     if (stkInputNumber.value.length < 9) {
                         triggerNotification('Invalid Phone', 'Please provide a valid 9-digit mobile number.', 'error');
@@ -1215,6 +1335,7 @@ echo $stk_response;
                 return {
                     currentTab, searchQuery, statusFilter, clients, team, mpesaTransactions,
                     toasts, dismissToast, triggerNotification,
+                    integrationMode, backendBaseUrl, toggleIntegrationMode, executeMpesaStkTrigger, triggerLiveStkPush,
                     openStkModal, activeStkClient, stkInputNumber, stkStep, isPushingStk, stkLogs, stkProgressText,
                     rawSmsInput, openNewClientModal, openCodeModal, activeCodeLang, newClient,
                     totalRevenue, outstandingRevenue, collectionEfficiency, unpaidClients, filteredClients,
